@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Services\MutationMatcherService;
 use App\Services\QrisMutatorService;
 
 /**
@@ -32,5 +33,27 @@ class PaymentGatewayController
             'data'      => $mutated,
             'signature' => QrisMutatorService::signWebhook($webhookPayload, $webhookSecret),
         ];
+    }
+
+    /**
+     * Handle incoming bank/merchant notification webhook & settle matching invoice.
+     *
+     * @param array<string, mixed> $request
+     * @param array<int, array<string, mixed>> $pendingInvoices
+     * @return array<string, mixed>
+     */
+    public function handleBankMutation(array $request, array $pendingInvoices, string $webhookSecret): array
+    {
+        $rawText = (string) ($request['notification_text'] ?? '');
+        $settlement = MutationMatcherService::matchAndSettle($rawText, $pendingInvoices, $webhookSecret);
+
+        if ($settlement === null) {
+            return [
+                'matched' => false,
+                'status'  => 'UNMATCHED',
+            ];
+        }
+
+        return $settlement;
     }
 }

@@ -26,6 +26,50 @@
       --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
     }
 
+    [data-theme="light"] {
+      --bg-canvas: #f7f8f8;
+      --bg-panel: #ffffff;
+      --bg-elevated: #f3f4f5;
+      --bg-hover: rgba(0, 0, 0, 0.04);
+      --text-primary: #08090a;
+      --text-secondary: #28282c;
+      --text-muted: #62666d;
+      --text-subtle: #8a8f98;
+      --accent-indigo: #5e6ad2;
+      --accent-violet: #4e5ac0;
+      --status-emerald: #059669;
+      --status-amber: #d97706;
+      --border-subtle: rgba(0, 0, 0, 0.06);
+      --border-std: #d0d6e0;
+    }
+
+    .mobile-nav {
+      display: none;
+      gap: 6px;
+      padding: 10px 16px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border-subtle);
+      overflow-x: auto;
+    }
+
+    @media (max-width: 920px) {
+      .mobile-nav {
+        display: flex;
+      }
+      header.topbar {
+        padding: 10px 16px;
+        height: auto;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .pane-left, .pane-right {
+        padding: 16px;
+      }
+      .row-2col {
+        grid-template-columns: 1fr;
+      }
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
@@ -526,10 +570,18 @@
         <span class="pill-tag pill-emerald">CRC16-CCITT VERIFIED</span>
       </div>
       <div class="top-actions">
+        <button class="btn" id="themeToggleBtn" onclick="toggleTheme()" aria-label="Toggle Light/Dark Theme">☀️ Light / 🌙 Dark</button>
         <button class="btn" onclick="randomizeUniqueCode()">Acak Kode Unik</button>
         <a href="https://github.com/josskixg/kujangpay" target="_blank" class="btn btn-primary" style="text-decoration:none;">GitHub Repo (PHP 8.2 / Laravel 11)</a>
       </div>
     </header>
+
+    <nav class="mobile-nav" aria-label="Mobile View Switcher">
+      <button class="btn" onclick="switchTab('console')">1. EMVCo TLV</button>
+      <button class="btn" onclick="switchTab('webhook')">2. Signed Webhook</button>
+      <button class="btn" onclick="switchTab('laravel')">3. Laravel 11 Code</button>
+      <button class="btn" onclick="simulateBankMutation()">⚡ Simulasi Mutasi Bank</button>
+    </nav>
 
     <!-- Telemetry Strip -->
     <section class="telemetry-strip">
@@ -922,6 +974,36 @@
       if (tab === 'webhook') setInspectorView('webhook');
       if (tab === 'laravel') setInspectorView('php');
     }
+
+    function toggleTheme() {
+      const root = document.documentElement;
+      const next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+      if (next === 'light') {
+        root.setAttribute('data-theme', 'light');
+      } else {
+        root.removeAttribute('data-theme');
+      }
+      localStorage.setItem('kujangpay_theme', next);
+    }
+
+    function simulateBankMutation() {
+      const pending = invoices.find(i => i.status === 'PENDING');
+      if (pending) {
+        pending.status = 'PAID';
+        renderTable();
+      } else {
+        createLiveInvoice();
+        invoices[0].status = 'PAID';
+        renderTable();
+      }
+    }
+
+    (function initTheme() {
+      const saved = localStorage.getItem('kujangpay_theme');
+      if (saved === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
 
     mutateNow();
   </script>

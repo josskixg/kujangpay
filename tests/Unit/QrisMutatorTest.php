@@ -3,13 +3,21 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../app/Services/QrisMutatorService.php';
+require_once __DIR__ . '/../../app/Services/MutationMatcherService.php';
 require_once __DIR__ . '/../../app/Http/Controllers/PaymentGatewayController.php';
 
 use App\Services\QrisMutatorService;
+use App\Services\MutationMatcherService;
 use App\Http\Controllers\PaymentGatewayController;
 
+// 0. Verify Laravel 11 Config File
+$config = require __DIR__ . '/../../config/kujangpay.php';
+assert(is_array($config), 'Config must return an array');
+assert($config['unique_code']['min'] === 1 && $config['unique_code']['max'] === 499, 'Unique code range must be 1..499');
+assert($config['expiry_minutes'] === 15, 'Default expiry must be 15 minutes');
+
 // Sample valid EMVCo Static QRIS (Merchant: KEDAI KUJANG, City: SERANG)
-$sampleStaticQris = '00020101021126600014ID.CO.QRIS.WWW011893600523000000012302091234567890303UMI5204581253033605802ID5912KEDAI KUJANG6006SERANG6304A1B2';
+$sampleStaticQris = $config['static_qris'];
 
 // 1. Verify TLV Parser
 $parsed = QrisMutatorService::parseTlv($sampleStaticQris);
@@ -42,4 +50,58 @@ $invoice = $controller->createInvoice(
 assert($invoice['data']['total_amount'] === 150088, 'Controller invoice total mismatch');
 assert(strlen($invoice['signature']) === 64, 'HMAC-SHA256 signature must be 64 hex characters');
 
-echo "PASS: PHP 8.2 / Laravel 11 QrisMutatorService (EMVCo TLV + CRC16-CCITT + HMAC-SHA256) verified.\n";
+// 4. Verify MutationMatcherService across BCA, Mandiri, BRI, and GoPay Merchant notifications
+$bca = MutationMatcherService::parseNotification('BCA: QRIS Kredit Rp 150.088,00 dari BUDI SANTOSO');
+assert($bca['amount'] === 150088 && $bca['channel'] === 'BCA', 'BCA notification parse failed');
+
+$mandiri = MutationMatcherService::parseNotification("Livin' by Mandiri: Transfer masuk IDR 75,123.00 berhasil");
+assert($mandiri['amount'] === 75123 && $mandiri['channel'] === 'MANDIRI', 'Mandiri notification parse failed');
+
+$gopay = MutationMatcherService::parseNotification('GoPay Merchant: Pembayaran QRIS Rp240.319 diterima');
+assert($gopay['amount'] === 240319 && $gopay['channel'] === 'GOPAY', 'GoPay notification parse failed');
+
+// Verify Auto-Matcher & Settlement Webhook Signing within active expiry window
+$now = 1762680000;
+$pendingPool = [
+    [
+        'invoice_ref'  => 'INV-2026-EXPIRED',
+        'merchant'     => 'KEDAI KUJANG',
+        'base_amount'  => 150000,
+        'unique_code'  => 88,
+        'total_amount' => 150088,
+        'crc16'        => $invoice['data']['crc16'],
+        'status'       => 'PENDING',
+        'expires_at'   => $now - 60, // already expired
+    ],
+    [
+        'invoice_ref'  => 'INV-2026-8888',
+        'merchant'     => 'KEDAI KUJANG',
+        'base_amount'  => 150000,
+        'unique_code'  => 88,
+        'total_amount' => 150088,
+        'crc16'        => $invoice['data']['crc16'],
+        'status'       => 'PENDING',
+        'expires_at'   => $now + 900, // active window
+    ],
+];
+
+$matched = MutationMatcherService::matchAndSettle(
+    'BCA: QRIS Kredit Rp 150.088,00 dari PELANGGAN QRIS',
+    $pendingPool,
+    'whsec_kujang_2026_secret',
+    $now
+);
+assert($matched !== null && $matched['matched'] === true, 'Active invoice must match');
+assert($matched['invoice_ref'] === 'INV-2026-8888', 'Must skip expired invoice and match active invoice');
+assert($matched['status'] === 'PAID', 'Settled status must be PAID');
+assert(strlen($matched['webhook_signature']) === 64, 'Settlement HMAC-SHA256 signature must be 64 hex chars');
+
+// Verify Controller handleBankMutation endpoint
+$controllerMatch = $controller->handleBankMutation(
+    ['notification_text' => 'BRImo Notifikasi: Dana Masuk QRIS Rp 150.088'],
+    [$pendingPool[1]],
+    'whsec_kujang_2026_secret'
+);
+assert($controllerMatch['matched'] === true && $controllerMatch['channel'] === 'BRI', 'Controller BRI mutation match failed');
+
+echo "PASS: PHP 8.2 / Laravel 11 QrisMutatorService + MutationMatcherService (EMVCo TLV + CRC16-CCITT + HMAC-SHA256) verified.\n";
