@@ -1,6 +1,5 @@
 <svg fill="#5e6ad2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><title>KujangPay</title>
   
-  <rect width="256" height="256" rx="56" fill="#5e6ad2"/>
   <path fill="#5e6ad2" fill-rule="evenodd" d="M 52 52 H 124 V 76 H 76 V 124 H 52 V 52 Z M 132 52 H 204 V 124 H 180 V 76 H 132 V 52 Z M 52 132 H 76 V 180 H 124 V 204 H 52 V 132 Z M 180 132 H 204 V 204 H 132 V 180 H 180 V 132 Z"/>
   <path fill="#5e6ad2" fill-rule="evenodd" d="M 88 88 H 116 V 116 L 144 88 H 176 L 138 126 L 176 164 H 144 L 116 136 V 168 H 88 V 88 Z M 102 98 A 6 6 0 1 0 102 110 A 6 6 0 1 0 102 98 Z M 102 146 A 6 6 0 1 0 102 158 A 6 6 0 1 0 102 146 Z"/>
 </svg>
